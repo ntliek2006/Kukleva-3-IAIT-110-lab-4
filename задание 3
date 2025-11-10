@@ -1,0 +1,152 @@
+#include <LedControl.h>
+
+#define DIN_PIN 11
+#define CLK_PIN 13  
+#define CS_PIN  10
+
+// Создание объекта LedControl
+LedControl lc = LedControl(DIN_PIN, CLK_PIN, CS_PIN, 1);
+
+// Паттерны для анимации
+byte patterns[][8] = {
+  { // Сердечко
+    B00000000,
+    B01100110,
+    B11111111,
+    B11111111,
+    B01111110,
+    B00111100,
+    B00011000,
+    B00000000
+  },
+  { // Смайлик
+    B00111100,
+    B01000010,
+    B10100101,
+    B10000001,
+    B10100101,
+    B10011001,
+    B01000010,
+    B00111100
+  },
+  { // Стрелка
+    B00001000,
+    B00001100,
+    B00001110,
+    B11111111,
+    B11111111,
+    B00001110,
+    B00001100,
+    B00001000
+  },
+  { // Шахматная доска
+    B10101010,
+    B01010101,
+    B10101010,
+    B01010101,
+    B10101010,
+    B01010101,
+    B10101010,
+    B01010101
+  }
+};
+
+int currentPattern = 0;
+unsigned long lastChange = 0;
+
+void setup() {
+  Serial.begin(9600);
+  
+  // Инициализация MAX7219
+  lc.shutdown(0, false);      // Выводим из режима энергосбережения
+  lc.setIntensity(0, 8);      // Устанавливаем яркость (0-15)
+  lc.clearDisplay(0);         // Очищаем дисплей
+  
+  Serial.println("8x8 Matrix with MAX7219 - READY");
+  Serial.println("Cycling through patterns every 2 seconds");
+}
+
+void loop() {
+  // Смена паттернов каждые 2 секунды
+  if (millis() - lastChange > 2000) {
+    displayPattern(currentPattern);
+    currentPattern = (currentPattern + 1) % 4;
+    lastChange = millis();
+    
+    Serial.print("Displaying pattern: ");
+    Serial.println(currentPattern);
+  }
+  
+  // Добавляем простую анимацию - мигание
+  static unsigned long lastBlink = 0;
+  static bool blinkState = false;
+  
+  if (millis() - lastBlink > 500) {
+    lc.setIntensity(0, blinkState ? 8 : 4);
+    blinkState = !blinkState;
+    lastBlink = millis();
+  }
+}
+
+// Функция отображения паттерна
+void displayPattern(int patternIndex) {
+  for (int row = 0; row < 8; row++) {
+    lc.setRow(0, row, patterns[patternIndex][row]);
+  }
+}
+
+// Функция для отрисовки отдельного пикселя
+void setPixel(int x, int y, bool state) {
+  if (x >= 0 && x < 8 && y >= 0 && y < 8) {
+    lc.setLed(0, x, y, state);
+  }
+}
+
+// Анимация бегущей точки
+void runningDotAnimation() {
+  lc.clearDisplay(0);
+  
+  for (int y = 0; y < 8; y++) {
+    for (int x = 0; x < 8; x++) {
+      setPixel(x, y, true);
+      delay(100);
+      setPixel(x, y, false);
+    }
+  }
+}
+
+// Анимация заполнения
+void fillAnimation() {
+  lc.clearDisplay(0);
+  
+  for (int row = 0; row < 8; row++) {
+    for (int col = 0; col < 8; col++) {
+      setPixel(row, col, true);
+      delay(50);
+    }
+  }
+  
+  for (int row = 0; row < 8; row++) {
+    for (int col = 0; col < 8; col++) {
+      setPixel(row, col, false);
+      delay(50);
+    }
+  }
+}
+
+// Функция для тестирования всех светодиодов
+void testAllLeds() {
+  Serial.println("Testing all LEDs...");
+  
+  // Включаем все светодиоды
+  for (int row = 0; row < 8; row++) {
+    lc.setRow(0, row, B11111111);
+  }
+  delay(1000);
+  
+  // Выключаем все светодиоды
+  for (int row = 0; row < 8; row++) {
+    lc.setRow(0, row, B00000000);
+  }
+  delay(500);
+}
