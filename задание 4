@@ -1,0 +1,185 @@
+#include <LedControl.h>
+
+#define DIN_PIN 11
+#define CLK_PIN 13  
+#define CS_PIN  10
+#define NUM_DEVICES 4
+
+LedControl lc = LedControl(DIN_PIN, CLK_PIN, CS_PIN, NUM_DEVICES);
+
+// Буфер для хранения состояния всех матриц
+byte matrixBuffer[4][8] = {0}; // 4 устройства, 8 строк каждое
+
+const char scrollText[] = "ARDUINO LAB WORK 2024 WOWKI DEMO  ";
+int textPosition = 0;
+int columnCounter = 0;
+unsigned long lastScroll = 0;
+
+// Простые паттерны для букв (8x8)
+const byte font[][8] = {
+  {0x3C, 0x42, 0x42, 0x7E, 0x42, 0x42, 0x42, 0x00}, // A
+  {0x7C, 0x42, 0x42, 0x7C, 0x42, 0x42, 0x7C, 0x00}, // B
+  {0x3C, 0x42, 0x40, 0x40, 0x40, 0x42, 0x3C, 0x00}, // C
+  {0x78, 0x44, 0x42, 0x42, 0x42, 0x44, 0x78, 0x00}, // D
+  {0x7E, 0x40, 0x40, 0x7C, 0x40, 0x40, 0x7E, 0x00}, // E
+  {0x7E, 0x40, 0x40, 0x7C, 0x40, 0x40, 0x40, 0x00}, // F
+  {0x3C, 0x42, 0x40, 0x4E, 0x42, 0x42, 0x3C, 0x00}, // G
+  {0x42, 0x42, 0x42, 0x7E, 0x42, 0x42, 0x42, 0x00}, // H
+  {0x3E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x3E, 0x00}, // I
+  {0x02, 0x02, 0x02, 0x02, 0x42, 0x42, 0x3C, 0x00}, // J
+  {0x42, 0x44, 0x48, 0x70, 0x48, 0x44, 0x42, 0x00}, // K
+  {0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x7E, 0x00}, // L
+  {0x42, 0x66, 0x5A, 0x42, 0x42, 0x42, 0x42, 0x00}, // M
+  {0x42, 0x62, 0x52, 0x4A, 0x46, 0x42, 0x42, 0x00}, // N
+  {0x3C, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3C, 0x00}, // O
+  {0x7C, 0x42, 0x42, 0x7C, 0x40, 0x40, 0x40, 0x00}, // P
+  {0x3C, 0x42, 0x42, 0x42, 0x4A, 0x44, 0x3A, 0x00}, // Q
+  {0x7C, 0x42, 0x42, 0x7C, 0x48, 0x44, 0x42, 0x00}, // R
+  {0x3C, 0x42, 0x40, 0x3C, 0x02, 0x42, 0x3C, 0x00}, // S
+  {0x7F, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x00}, // T
+  {0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3C, 0x00}, // U
+  {0x42, 0x42, 0x42, 0x42, 0x42, 0x24, 0x18, 0x00}, // V
+  {0x42, 0x42, 0x42, 0x42, 0x5A, 0x66, 0x42, 0x00}, // W
+  {0x42, 0x42, 0x24, 0x18, 0x24, 0x42, 0x42, 0x00}, // X
+  {0x42, 0x42, 0x24, 0x18, 0x18, 0x18, 0x18, 0x00}, // Y
+  {0x7E, 0x02, 0x04, 0x18, 0x20, 0x40, 0x7E, 0x00}, // Z
+  {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}  // Пробел
+};
+
+void setup() {
+  Serial.begin(9600);
+  
+  // Инициализация всех 4 устройств
+  for (int device = 0; device < NUM_DEVICES; device++) {
+    lc.shutdown(device, false);
+    lc.setIntensity(device, 8);
+    lc.clearDisplay(device);
+  }
+  
+  // Заполняем буфер начальными данными
+  initializeBuffer();
+  
+  Serial.println("4x8x8 Matrix Scrolling Text - WORKING VERSION");
+  Serial.println("Text will scroll continuously");
+}
+
+void loop() {
+  // Прокрутка каждые 100ms
+  if (millis() - lastScroll > 100) {
+    scrollLeft();
+    updateDisplaysFromBuffer();
+    lastScroll = millis();
+  }
+}
+
+// Инициализация буфера начальным текстом
+void initializeBuffer() {
+  for (int device = 0; device < NUM_DEVICES; device++) {
+    for (int row = 0; row < 8; row++) {
+      matrixBuffer[device][row] = 0;
+    }
+  }
+}
+
+// Прокрутка влево через буфер
+void scrollLeft() {
+  // Сдвигаем все устройства влево
+  for (int device = 0; device < NUM_DEVICES; device++) {
+    for (int row = 0; row < 8; row++) {
+      // Сдвигаем влево на 1 бит
+      matrixBuffer[device][row] = matrixBuffer[device][row] << 1;
+      
+      // Если это не последнее устройство, берем старший бит следующего устройства
+      if (device < NUM_DEVICES - 1) {
+        bool nextBit = (matrixBuffer[device + 1][row] & 0x80) != 0;
+        if (nextBit) {
+          matrixBuffer[device][row] |= 0x01;
+        }
+      }
+    }
+  }
+  
+  // Добавляем новые данные в последнее устройство
+  addNewDataToLastDevice();
+}
+
+// Добавление новых данных в последнее устройство
+void addNewDataToLastDevice() {
+  char currentChar = scrollText[textPosition];
+  int charIndex = getCharIndex(currentChar);
+  
+  // Добавляем новый столбец в последнее устройство
+  for (int row = 0; row < 8; row++) {
+    // Берем бит из шрифта для текущей колонки
+    bool newBit = (font[charIndex][row] >> (7 - columnCounter)) & 1;
+    
+    if (newBit) {
+      matrixBuffer[NUM_DEVICES - 1][row] |= 0x01; // Устанавливаем младший бит
+    } else { matrixBuffer[NUM_DEVICES - 1][row] &= 0xFE; // Сбрасываем младший бит
+    }
+  }
+  
+  columnCounter++;
+  if (columnCounter >= 8) {
+    columnCounter = 0;
+    textPosition = (textPosition + 1) % (sizeof(scrollText) - 1);
+    
+    // Вывод отладочной информации
+    Serial.print("Next character: ");
+    Serial.println(currentChar);
+  }
+}
+
+// Получение индекса символа
+int getCharIndex(char c) {
+  if (c >= 'A' && c <= 'Z') return c - 'A';
+  if (c >= 'a' && c <= 'z') return c - 'a';
+  return 26; // Пробел для остальных символов
+}
+
+// Обновление физических дисплеев из буфера
+void updateDisplaysFromBuffer() {
+  for (int device = 0; device < NUM_DEVICES; device++) {
+    for (int row = 0; row < 8; row++) {
+      lc.setRow(device, row, matrixBuffer[device][row]);
+    }
+  }
+}
+
+// Альтернативный простой метод - волна
+void waveDemo() {
+  static int wavePos = 0;
+  
+  for (int device = 0; device < NUM_DEVICES; device++) {
+    for (int row = 0; row < 8; row++) {
+      byte pattern = 1 << ((row + wavePos + device * 2) % 8);
+      lc.setRow(device, row, pattern);
+    }
+  }
+  
+  wavePos++;
+  if (wavePos >= 8) wavePos = 0;
+}
+
+// Функция тестирования - бегущая точка
+void runningDotDemo() {
+  static int dotX = 0, dotY = 0;
+  
+  // Очищаем все
+  for (int device = 0; device < NUM_DEVICES; device++) {
+    lc.clearDisplay(device);
+  }
+  
+  // Устанавливаем точку
+  int device = dotX / 8;
+  int col = dotX % 8;
+  lc.setLed(device, dotY, col, true);
+  
+  // Двигаем точку
+  dotX++;
+  if (dotX >= NUM_DEVICES * 8) {
+    dotX = 0;
+    dotY++;
+    if (dotY >= 8) dotY = 0;
+  }
+}
