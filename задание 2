@@ -1,0 +1,149 @@
+#define LATCH_PIN 4
+#define CLOCK_PIN 7  
+#define DATA_PIN  8
+
+// Коды цифр для COMMON CATHODE
+const byte digitPatterns[] = {
+  0b00111111, // 0 - ABCDEF
+  0b00000110, // 1 - BC
+  0b01011011, // 2 - ABDEG
+  0b01001111, // 3 - ABCDGF
+  0b01100110, // 4 - BCFG
+  0b01101101, // 5 - ACDFG
+  0b01111101, // 6 - ACDEFG
+  0b00000111, // 7 - ABC
+  0b01111111, // 8 - все сегменты
+  0b01101111  // 9 - ABCDFG
+};
+
+int displayValue = 0;
+unsigned long lastChange = 0;
+bool showNumberFlag = true;
+
+void setup() {
+  Serial.begin(9600);
+  
+  pinMode(LATCH_PIN, OUTPUT);
+  pinMode(CLOCK_PIN, OUTPUT);
+  pinMode(DATA_PIN, OUTPUT);
+  
+  // Изначально показать 0000
+  showFourDigits(0, 0, 0, 0);
+  
+  Serial.println("4-Digit 7-Segment in Wokwi");
+  Serial.println("Potentiometer on A0 controls display");
+}
+
+void loop() {
+  // Чтение потенциометра
+  int potValue = analogRead(A0);
+  displayValue = map(potValue, 0, 1023, 0, 9999);
+  
+  // Мигающий режим для демонстрации работы
+  if (millis() - lastChange > 1000) {
+    showNumberFlag = !showNumberFlag;
+    lastChange = millis();
+  }
+  
+  if (showNumberFlag) {
+    // Показываем настоящее число
+    showNumber(displayValue);
+  } else {
+    // Показываем все 8 (тест сегментов)
+    showFourDigits(8, 8, 8, 8);
+  }
+  
+  // Вывод в Serial
+  static unsigned long lastSerial = 0;
+  if (millis() - lastSerial > 500) {
+    Serial.print("A0: ");
+    Serial.print(potValue);
+    Serial.print(" -> Display: ");
+    Serial.println(displayValue);
+    lastSerial = millis();
+  }
+  
+  delay(100);
+}
+
+// Функция отображения числа с подавлением ведущих нулей
+void showNumber(int number) {
+  int digit1 = (number / 1000) % 10;
+  int digit2 = (number / 100) % 10;
+  int digit3 = (number / 10) % 10;
+  int digit4 = number % 10;
+  
+  // Подавление ведущих нулей
+  if (number < 1000) digit1 = 0; // Показываем 0 вместо пустоты
+  if (number < 100) digit2 = 0;
+  if (number < 10) digit3 = 0;
+  
+  showFourDigits(digit1, digit2, digit3, digit4);
+}
+
+// Функция отображения четырех цифр
+// В Wokwi все 4 цифры отображаются одинаково, поэтому показываем только первую
+void showFourDigits(int d1, int d2, int d3, int d4) {
+  byte pattern = digitPatterns[d1]; // Берем паттерн первой цифры
+  
+  digitalWrite(LATCH_PIN, LOW);
+  shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, pattern);
+  digitalWrite(LATCH_PIN, HIGH);
+}
+
+// Демонстрационные функции
+void runDemo() {
+  Serial.println("Starting demonstration...");
+  
+  // Демонстрация цифр 0-9
+  for (int i = 0; i < 10; i++) {
+    showFourDigits(i, i, i, i);
+    Serial.print("Showing: ");
+    Serial.println(i);
+    delay(500);
+  }
+  
+  // Демонстрация бегущей точки
+  for (int i = 0; i < 10; i++) {
+    byte pattern = digitPatterns[8]; // Цифра 8
+    if (i < 8) {
+      pattern &= ~(1 << i); // Выключаем один сегмент
+    }
+    
+    digitalWrite(LATCH_PIN, LOW);
+    shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, pattern);
+    digitalWrite(LATCH_PIN, HIGH);
+    
+    delay(300);
+  }
+  
+  // Возврат к нормальному режиму
+  showNumber(displayValue);
+}
+
+// Функция тестирования всех сегментов
+void testSegments() {
+  Serial.println("Segment test: a,b,c,d,e,f,g,dp");
+  
+  // Тест каждого сегмента по очереди
+  for (int seg = 0; seg < 8; seg++) {
+    byte pattern = (1 << seg); // Включаем только один сегмент
+    
+    digitalWrite(LATCH_PIN, LOW);
+    shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, pattern);
+    digitalWrite(LATCH_PIN, HIGH);
+    
+    Serial.print("Segment ");
+    Serial.println(seg);
+    delay(500);
+  }
+  
+  // Все сегменты включены
+  digitalWrite(LATCH_PIN, LOW);
+  shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, 0b01111111);
+  digitalWrite(LATCH_PIN, HIGH);
+  delay(1000);
+  
+  // Возврат к нормальному режиму
+  showNumber(displayValue);
+}
