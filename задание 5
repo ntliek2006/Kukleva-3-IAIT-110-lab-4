@@ -1,0 +1,350 @@
+#include <LiquidCrystal.h>
+
+// Определение пинов для LCD (RS, EN, D4, D5, D6, D7)
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
+
+// Переменные для демонстрации
+unsigned long startTime;
+int displayMode = 0;
+unsigned long lastModeChange = 0;
+int scrollPosition = 0;
+unsigned long lastScroll = 0;
+
+void setup() {
+  Serial.begin(9600);
+  
+  // Инициализация LCD (16 столбцов, 2 строки)
+  lcd.begin(16, 2);
+  
+  startTime = millis();
+  
+  // Приветственное сообщение
+  lcd.print("Lab Work #4");
+  lcd.setCursor(0, 1);
+  lcd.print("LCD 16x2 Ready!");
+  
+  Serial.println("LCD 16x2 Display - READY");
+  Serial.println("Cycling through display modes every 5 seconds");
+  
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  // Смена режимов отображения каждые 5 секунд
+  if (millis() - lastModeChange > 5000) {
+    displayMode = (displayMode + 1) % 5;
+    lastModeChange = millis();
+    lcd.clear();
+    
+    Serial.print("Switching to mode: ");
+    Serial.println(displayMode);
+  }
+  
+  // Отображение в зависимости от режима
+  switch (displayMode) {
+    case 0:
+      displayWelcome();
+      break;
+    case 1:
+      displayTimeAndSensors();
+      break;
+    case 2:
+      displayScrollingText();
+      break;
+    case 3:
+      displayProgressBars();
+      break;
+    case 4:
+      displayCustomChars();
+      break;
+  }
+  
+  delay(200);
+}
+
+// Режим 0: Приветственное сообщение
+void displayWelcome() {
+  lcd.setCursor(0, 0);
+  lcd.print("===Lab Work #4===");
+  lcd.setCursor(0, 1);
+  lcd.print(" LCD 16x2 Demo  ");
+}
+
+// Режим 1: Время и данные сенсоров
+void displayTimeAndSensors() {
+  unsigned long currentTime = millis() - startTime;
+  int seconds = currentTime / 1000;
+  int minutes = seconds / 60;
+  
+  // Чтение потенциометра на A0
+  int potValue = analogRead(A0);
+  float voltage = potValue * (5.0 / 1023.0);
+  
+  // Верхняя строка - время
+  lcd.setCursor(0, 0);
+  lcd.print("Time: ");
+  lcd.print(minutes % 60);
+  lcd.print(":");
+  lcd.print(seconds % 60 < 10 ? "0" : "");
+  lcd.print(seconds % 60);
+  lcd.print("   ");
+  
+  // Нижняя строка - данные сенсора
+  lcd.setCursor(0, 1);
+  lcd.print("A0: ");
+  lcd.print(potValue);
+  lcd.print(" (");
+  lcd.print(voltage, 1);
+  lcd.print("V) ");
+}
+
+// Режим 2: Бегущий текст
+void displayScrollingText() {
+  const char* longText = "Arduino LCD 16x2 Display - Laboratory Work #4 - Dynamic Indication Methods - ";
+  int textLength = strlen(longText);
+  
+  if (millis() - lastScroll > 300) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Scrolling Text:");
+    
+    // Вычисляем позицию для бегущей строки
+    int startPos = scrollPosition % textLength;
+    
+    lcd.setCursor(0, 1);
+    // Отображаем 16 символов начиная с startPos
+    for (int i = 0; i < 16; i++) {
+      int charPos = (startPos + i) % textLength;
+      lcd.print(longText[charPos]);
+    }
+    
+    scrollPosition++;
+    lastScroll = millis();
+    
+    // Отладочная информация
+    if (scrollPosition % 10 == 0) {
+      Serial.print("Scroll position: ");
+      Serial.println(scrollPosition);
+    }
+  }
+}
+
+// Режим 3: Прогресс-бары и анимация
+void displayProgressBars() {
+  static int progress = 0;
+  static unsigned long lastProgress = 0;
+  
+  if (millis() - lastProgress > 200) {
+    progress = (progress + 1) % 101;
+    lastProgress = millis();
+  }
+  
+  // Верхняя строка - прогресс-бар 1
+  lcd.setCursor(0, 0);
+  lcd.print("Progress1: [");
+  int bars1 = map(progress, 0, 100, 0, 6);
+  for (int i = 0; i < 6; i++) {
+    lcd.print(i < bars1 ? "=" : " ");
+  }
+  lcd.print("]");
+  
+  // Нижняя строка - прогресс-бар 2 (обратный)
+  lcd.setCursor(0, 1);
+  lcd.print("Progress2: [");
+  int bars2 = map(100 - progress, 0, 100, 0, 6);
+  for (int i = 0; i < 6; i++) {
+    lcd.print(i < bars2 ? "=" : " ");
+  }
+  lcd.print("]");
+}
+
+// Режим 4: Пользовательские символы
+void displayCustomChars() {
+  // Создаем пользовательские символы
+  createCustomCharacters();
+  
+  static bool showCustom = false;
+  static unsigned long lastToggle = 0;
+  
+  if (millis() - lastToggle > 1500) {
+    showCustom = !showCustom;
+    lastToggle = millis();
+lcd.clear();
+  }
+  
+  if (showCustom) {
+    lcd.setCursor(0, 0);
+    lcd.print("Custom Chars:");
+    lcd.setCursor(0, 1);
+    // Отображаем пользовательские символы
+    for (int i = 0; i < 8; i++) {
+      lcd.write(byte(i));
+      lcd.print(" ");
+    }
+  } else {
+    lcd.setCursor(0, 0);
+    lcd.print("Special Symbols:");
+    lcd.setCursor(0, 1);
+    lcd.print("<- -> ^ v ");
+    lcd.write(0x7E); // Стрелка вправо
+    lcd.print(" ");
+    lcd.write(0x7F); // Стрелка влево
+  }
+}
+
+// Создание пользовательских символов
+void createCustomCharacters() {
+  // Символ 0: Сердечко
+  byte heart[8] = {
+    B00000,
+    B01010,
+    B11111,
+    B11111,
+    B01110,
+    B00100,
+    B00000,
+    B00000
+  };
+  
+  // Символ 1: Смайлик
+  byte smiley[8] = {
+    B00000,
+    B00000,
+    B01010,
+    B00000,
+    B10001,
+    B01110,
+    B00000,
+    B00000
+  };
+  
+  // Символ 2: Стрелка вверх
+  byte arrowUp[8] = {
+    B00100,
+    B01110,
+    B11111,
+    B00100,
+    B00100,
+    B00100,
+    B00100,
+    B00000
+  };
+  
+  // Символ 3: Стрелка вниз
+  byte arrowDown[8] = {
+    B00100,
+    B00100,
+    B00100,
+    B00100,
+    B11111,
+    B01110,
+    B00100,
+    B00000
+  };
+  
+  // Символ 4: Закрашенный квадрат
+  byte fullBlock[8] = {
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+    B11111,
+    B11111
+  };
+  
+  // Символ 5: Пустой квадрат
+  byte emptyBlock[8] = {
+    B11111,
+    B10001,
+    B10001,
+    B10001,
+    B10001,
+    B10001,
+    B10001,
+    B11111
+  };
+  
+  // Символ 6: Галочка
+  byte checkmark[8] = {
+    B00000,
+    B00001,
+    B00011,
+    B10110,
+    B11100,
+    B01000,
+    B00000,
+    B00000
+  };
+  
+  // Символ 7: Звезда
+  byte star[8] = {
+    B00000,
+    B00100,
+    B10101,
+    B01110,
+    B01110,
+    B10101,
+    B00100,
+    B00000
+  };
+  
+  lcd.createChar(0, heart);
+  lcd.createChar(1, smiley);
+  lcd.createChar(2, arrowUp);
+  lcd.createChar(3, arrowDown);
+  lcd.createChar(4, fullBlock);
+  lcd.createChar(5, emptyBlock);
+  lcd.createChar(6, checkmark);
+  lcd.createChar(7, star);
+}
+
+// Дополнительные демонстрационные функции
+
+// Демонстрация всех символов
+void displayAllCharacters() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("All Characters:");
+  
+  lcd.setCursor(0, 1);
+  for (char c = 33; c < 127; c++) {
+    lcd.print(c);
+    delay(100);
+    if ((c - 32) % 16 == 0) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("All Characters:");
+      lcd.setCursor(0, 1);
+    }
+  }
+}
+
+// Демонстрация курсора
+void cursorDemo() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Cursor Demo");
+  
+  // Мигающий курсор
+  for (int i = 0; i < 10; i++) {
+    lcd.cursor();
+    delay(500);
+    lcd.noCursor();
+    delay(500);
+  }
+  
+  // Бегущий курсор
+  lcd.clear();
+  lcd.print("Running cursor:");
+  for (int pos = 0; pos < 16; pos++) {
+    lcd.setCursor(pos, 1);
+    lcd.cursor();
+    delay(300);
+    lcd.noCursor();
+  }
+  
+  lcd.noCursor();
+}
