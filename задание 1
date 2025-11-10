@@ -1,0 +1,223 @@
+#include <Adafruit_GFX.h>
+#include <Adafruit_ILI9341.h>
+#include <Wire.h>
+
+// Определение пинов для TFT-дисплея
+#define TFT_CS   10
+#define TFT_DC   9
+#define TFT_RST  8
+
+// Создание объекта дисплея
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+
+// Переменные для симуляции касания (в Wokwi сенсор может не работать)
+bool touchActive = false;
+int touchX = 0;
+int touchY = 0;
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Инициализация дисплея
+  tft.begin();
+  tft.setRotation(3); // Ориентация дисплея
+  tft.fillScreen(ILI9341_BLACK);
+  
+  // Настройка текста
+  tft.setTextColor(ILI9341_WHITE);
+  tft.setTextSize(2);
+  
+  // Вывод приветственного сообщения
+  tft.setCursor(10, 10);
+  tft.println("TFT 320x240 Demo");
+  tft.setCursor(10, 40);
+  tft.println("Wokwi Simulation");
+  tft.setCursor(10, 70);
+  tft.println("Use mouse to 'touch'");
+  
+  // Рисуем кнопки для демонстрации
+  drawDemoButtons();
+  
+  // Рисуем инструкцию
+  drawInstructions();
+  
+  Serial.println("TFT Display Ready!");
+}
+
+void loop() {
+  // В Wokwi мы можем симулировать касание через Serial
+  simulateTouch();
+  
+  // Небольшая задержка
+  delay(100);
+}
+
+// Функция рисования демонстрационных кнопок
+void drawDemoButtons() {
+  // Кнопка 1 - Красный круг
+  tft.fillCircle(60, 150, 30, ILI9341_RED);
+  tft.setTextColor(ILI9341_WHITE);
+  tft.setTextSize(1);
+  tft.setCursor(45, 145);
+  tft.println("RED");
+  
+  // Кнопка 2 - Зеленый квадрат
+  tft.fillRect(150, 120, 60, 60, ILI9341_GREEN);
+  tft.setCursor(160, 145);
+  tft.println("GREEN");
+  
+  // Кнопка 3 - Синий треугольник
+  tft.fillTriangle(260, 180, 240, 120, 280, 120, ILI9341_BLUE);
+  tft.setCursor(250, 145);
+  tft.println("BLUE");
+  
+  // Кнопка очистки
+  tft.fillRoundRect(100, 200, 120, 30, 5, ILI9341_YELLOW);
+  tft.setTextColor(ILI9341_BLACK);
+  tft.setCursor(125, 208);
+  tft.println("CLEAR SCREEN");
+  
+  tft.setTextSize(2); // Возвращаем размер текста
+}
+
+// Функция рисования инструкций
+void drawInstructions() {
+  tft.setTextColor(ILI9341_CYAN);
+  tft.setTextSize(1);
+  tft.setCursor(10, 250);
+  tft.println("Open Serial Monitor for touch simulation");
+  tft.setCursor(10, 265);
+  tft.println("Send: X,Y (e.g., 100,150)");
+  tft.setTextSize(2);
+}
+
+// Функция симуляции касания через Serial
+void simulateTouch() {
+  if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    
+    // Обработка команд формата "X,Y"
+    int commaIndex = input.indexOf(',');
+    if (commaIndex > 0) {
+      int x = input.substring(0, commaIndex).toInt();
+      int y = input.substring(commaIndex + 1).toInt();
+      
+      // Ограничиваем координаты
+      x = constrain(x, 0, 319);
+      y = constrain(y, 0, 239);
+      
+      // Обрабатываем "касание"
+      handleTouch(x, y);
+      
+      Serial.print("Simulated touch: X=");
+      Serial.print(x);
+      Serial.print(", Y=");
+      Serial.println(y);
+    }
+  }
+}
+
+// Функция обработки "касания"
+void handleTouch(int x, int y) {
+  // Рисуем точку касания
+  tft.fillCircle(x, y, 5, ILI9341_MAGENTA);
+  
+  // Проверяем нажатие на кнопки
+  checkButtons(x, y);
+  
+  // Обновляем информацию о последнем касании
+  updateTouchInfo(x, y);
+}
+
+// Функция проверки нажатия на кнопки
+void checkButtons(int x, int y) {
+  // Проверка красной кнопки (круг)
+  if (sqrt(pow(x - 60, 2) + pow(y - 150, 2)) <= 30) {
+    tft.fillScreen(ILI9341_RED);
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setCursor(100, 100);
+    tft.println("RED!");
+    delay(1000);
+    resetScreen();
+    return;
+  }
+  
+  // Проверка зеленой кнопки (квадрат)
+  if (x >= 150 && x <= 210 && y >= 120 && y <= 180) {
+    tft.fillScreen(ILI9341_GREEN);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.setCursor(100, 100);
+    tft.println("GREEN!");
+    delay(1000);
+    resetScreen();
+    return;
+  }
+  
+  // Проверка синей кнопки (треугольник)
+  // Простая проверка для треугольника
+  if (x >= 240 && x <= 280 && y >= 120 && y <= 180) {
+    tft.fillScreen(ILI9341_BLUE);
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setCursor(100, 100);
+    tft.println("BLUE!");
+    delay(1000);
+    resetScreen();
+    return;
+}
+  
+  // Проверка кнопки очистки
+  if (x >= 100 && x <= 220 && y >= 200 && y <= 230) {
+    resetScreen();
+    return;
+  }
+}
+
+// Функция обновления информации о касании
+void updateTouchInfo(int x, int y) {
+  tft.fillRect(0, 280, 320, 20, ILI9341_BLACK);
+  tft.setTextColor(ILI9341_YELLOW);
+  tft.setTextSize(1);
+  tft.setCursor(10, 285);
+  tft.print("Last touch: X=");
+  tft.print(x);
+  tft.print(" Y=");
+  tft.print(y);
+  tft.setTextSize(2);
+}
+
+// Функция сброса экрана
+void resetScreen() {
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setTextColor(ILI9341_WHITE);
+  tft.setTextSize(2);
+  tft.setCursor(10, 10);
+  tft.println("TFT 320x240 Demo");
+  drawDemoButtons();
+  drawInstructions();
+}
+
+// Демонстрация графических примитивов
+void demoGraphics() {
+  tft.fillScreen(ILI9341_BLACK);
+  
+  // Рисуем различные фигуры
+  tft.fillRect(10, 10, 60, 40, ILI9341_RED);
+  tft.drawRect(80, 10, 60, 40, ILI9341_GREEN);
+  
+  tft.fillCircle(160, 100, 30, ILI9341_BLUE);
+  tft.drawCircle(260, 100, 30, ILI9341_YELLOW);
+  
+  tft.drawTriangle(30, 150, 60, 200, 10, 200, ILI9341_CYAN);
+  tft.fillTriangle(90, 150, 120, 200, 70, 200, ILI9341_MAGENTA);
+  
+  // Рисуем линии
+  tft.drawLine(150, 150, 250, 200, ILI9341_WHITE);
+  
+  // Выводим текст
+  tft.setCursor(120, 220);
+  tft.println("Graphics Demo");
+  
+  delay(5000);
+  resetScreen();
+}
