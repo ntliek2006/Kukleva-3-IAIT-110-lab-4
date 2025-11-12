@@ -1,0 +1,87 @@
+#define LATCH_PIN 4
+#define CLOCK_PIN 7  
+#define DATA_PIN  8
+
+const byte digitPatterns[] = {
+  0b11000000, // 0
+  0b11111001, // 1
+  0b10100100, // 2
+  0b10110000, // 3
+  0b10011001, // 4
+  0b10010010, // 5
+  0b10000010, // 6
+  0b11111000, // 7
+  0b10000000, // 8
+  0b10010000  // 9
+};
+
+const byte digitSelect[] = {
+  0b11101111, // Digit 1
+  0b11011111, // Digit 2
+  0b10111111, // Digit 3
+  0b01111111  // Digit 4
+};
+
+int displayNumber = 0;
+int currentDigit = 0;
+unsigned long lastUpdate = 0;
+
+void setup() {
+  Serial.begin(9600);
+  
+  pinMode(LATCH_PIN, OUTPUT);
+  pinMode(CLOCK_PIN, OUTPUT);
+  pinMode(DATA_PIN, OUTPUT);
+  
+  // Разряды напрямую к Arduino
+  for (int i = 10; i <= 13; i++) {
+    pinMode(i, OUTPUT);
+    digitalWrite(i, HIGH);
+  }
+  
+  Serial.println("74HC595 + Direct Digits - NO RESISTORS");
+}
+
+void loop() {
+  int potValue = analogRead(A0);
+  displayNumber = map(potValue, 0, 1023, 0, 9999);
+  
+  if (micros() - lastUpdate > 2500) {
+    updateDisplay();
+    lastUpdate = micros();
+  }
+}
+
+void updateDisplay() {
+  // Выключаем все разряды
+  for (int i = 10; i <= 13; i++) {
+    digitalWrite(i, HIGH);
+  }
+  
+  int digits[4];
+  digits[0] = (displayNumber / 1000) % 10;
+  digits[1] = (displayNumber / 100) % 10;
+  digits[2] = (displayNumber / 10) % 10;
+  digits[3] = displayNumber % 10;
+  
+  if (displayNumber < 1000) digits[0] = 10;
+  if (displayNumber < 100) digits[1] = 10;
+  if (displayNumber < 10) digits[2] = 10;
+  
+  // Сегменты через 74HC595
+  byte segmentData;
+  if (digits[currentDigit] == 10) {
+    segmentData = 0b11111111;
+  } else {
+    segmentData = digitPatterns[digits[currentDigit]];
+  }
+  
+  digitalWrite(LATCH_PIN, LOW);
+  shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, segmentData);
+  digitalWrite(LATCH_PIN, HIGH);
+  
+  // Включаем разряд напрямую
+  digitalWrite(10 + currentDigit, LOW);
+  
+  currentDigit = (currentDigit + 1) % 4;
+}
