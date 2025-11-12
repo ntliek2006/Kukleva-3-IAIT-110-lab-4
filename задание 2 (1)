@@ -1,0 +1,135 @@
+const uint8_t segPins[] = {2, 3, 4, 5, 6, 7, 8, 9};
+const uint8_t digitPins[] = {10, 11, 12, 13};
+
+const uint8_t digitPatterns[10] = {
+  0b00111111, // 0
+  0b00000110, // 1
+  0b01011011, // 2
+  0b01001111, // 3
+  0b01100110, // 4
+  0b01101101, // 5
+  0b01111101, // 6
+  0b00000111, // 7
+  0b01111111, // 8
+  0b01101111  // 9
+};
+
+int displayNumber = 1234;
+int currentDigit = 0;
+unsigned long lastUpdate = 0;
+
+void setup() {
+  Serial.begin(9600);
+  
+  // Настройка пинов - БЕЗ резисторов!
+  for (int i = 0; i < 8; i++) {
+    pinMode(segPins[i], OUTPUT);
+  }
+  
+  for (int i = 0; i < 4; i++) {
+    pinMode(digitPins[i], OUTPUT);
+  }
+  
+  // Изначально выключить все
+  turnOffAllDigits();
+  
+  Serial.println("4-Digit 7-Segment - NO RESISTORS");
+  Serial.println("Working in Wokwi simulation");
+}
+
+void loop() {
+  // Чтение потенциометра для изменения числа
+  int potValue = analogRead(A0);
+  displayNumber = map(potValue, 0, 1023, 0, 9999);
+  
+  // Динамическая индикация
+  if (micros() - lastUpdate > 3000) { // 3ms per digit = ~83Hz total
+    updateDisplay();
+    lastUpdate = micros();
+  }
+  
+  // Отладочная информация
+  static unsigned long lastSerial = 0;
+  if (millis() - lastSerial > 2000) {
+    Serial.print("Displaying: ");
+    Serial.println(displayNumber);
+    lastSerial = millis();
+  }
+}
+
+void updateDisplay() {
+  // Выключаем все разряды
+  turnOffAllDigits();
+  
+  // Получаем цифры
+  int digits[4];
+  digits[0] = (displayNumber / 1000) % 10;
+  digits[1] = (displayNumber / 100) % 10;
+  digits[2] = (displayNumber / 10) % 10;
+  digits[3] = displayNumber % 10;
+  
+  // Подавление ведущих нулей
+  if (displayNumber < 1000) digits[0] = 10;
+  if (displayNumber < 100) digits[1] = 10;
+  if (displayNumber < 10) digits[2] = 10;
+  
+  // Включаем текущий разряд
+  digitalWrite(digitPins[currentDigit], LOW);
+  
+  // Устанавливаем сегменты
+  uint8_t pattern;
+  if (digits[currentDigit] == 10) {
+    pattern = 0b00000000; // Пусто
+  } else {
+    pattern = digitPatterns[digits[currentDigit]];
+  }
+  
+  // Управляем сегментами
+  for (int seg = 0; seg < 8; seg++) {
+    digitalWrite(segPins[seg], (pattern >> seg) & 1);
+  }
+  
+  // Следующий разряд
+  currentDigit = (currentDigit + 1) % 4;
+}
+
+void turnOffAllDigits() {
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(digitPins[i], HIGH);
+  }
+}
+
+void showNumber(int number) {
+  displayNumber = constrain(number, 0, 9999);
+}
+
+// Тест - все сегменты включены
+void testAllOn() {
+  Serial.println("Testing - all segments ON");
+  
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(digitPins[i], LOW);
+  }
+  
+  for (int seg = 0; seg < 8; seg++) {
+    digitalWrite(segPins[seg], HIGH);
+  }
+  
+  delay(2000);
+  turnOffAllDigits();
+}
+
+// Бегущий ноль
+void runningZero() {
+  for (int i = 0; i < 4; i++) {
+    turnOffAllDigits();
+    digitalWrite(digitPins[i], LOW);
+    
+    // Цифра 0
+    for (int seg = 0; seg < 8; seg++) {
+      digitalWrite(segPins[seg], (digitPatterns[0] >> seg) & 1);
+    }
+    
+    delay(300);
+  }
+}
